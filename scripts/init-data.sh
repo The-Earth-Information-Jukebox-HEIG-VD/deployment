@@ -1,6 +1,7 @@
 #!/bin/bash
 # Initialize data volume from the datasets container
-# Usage: ./scripts/init-data.sh [tag]
+# Usage: ./scripts/init-data.sh [version]
+#   version defaults to DATASETS_VERSION from .env (then DATA_TAG, then latest)
 #
 # This script manually triggers data initialization, useful for:
 # - Pre-populating volumes before starting services
@@ -8,7 +9,9 @@
 
 set -e
 
-TAG="${1:-latest}"
+cd "$(dirname "$0")/.."
+if [ -f .env ]; then set -a; . ./.env; set +a; fi
+TAG="${1:-${DATASETS_VERSION:-${DATA_TAG:-latest}}}"
 REGISTRY="ghcr.io/the-earth-information-jukebox-heig-vd"
 
 echo "=== Earth Information Jukebox: Data Initialization ==="

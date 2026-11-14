@@ -99,8 +99,10 @@ internally on 8000).
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `TAG` | latest | Image version for webapp and backend |
-| `DATA_TAG` | latest | Image version for datasets |
+| `WEBAPP_VERSION` | latest | Version of the `webapp` image (Git tag without `v`) |
+| `SONIFICATION_VERSION` | latest | Version of the `sonification` (backend) image |
+| `DATASETS_VERSION` | latest | Version of the `datasets` image |
+| `TAG` / `DATA_TAG` | - | Legacy fallbacks: `TAG` for webapp + sonification, `DATA_TAG` for datasets, used only when the variables above are unset |
 | `WEBAPP_PORT` | 80 | Public port for webapp |
 | `BACKEND_PORT` | 8000 | Port for backend API |
 | `JUKEBOX_CORS` | * | CORS allowed origins |
