@@ -1,13 +1,73 @@
 # Production overrides for Earth Information Jukebox
+# Traefik reverse proxy with automatic Let's Encrypt certificates.
+#
+#   https://${DOMAIN}        → webapp   (https://www.${DOMAIN} redirects here)
+#   https://api.${DOMAIN}    → backend  (FastAPI, /api/...)
+#
+# The webapp still calls /api on its own origin (nginx proxies it to the backend
+# inside the Docker network), so the GHCR image built with VITE_API_URL=/api
+# works on any domain without a rebuild.
+#
+# Requirements:
+#   - DNS A/AAAA records for ${DOMAIN}, www.${DOMAIN} and api.${DOMAIN} → this server
+#   - ports 80 and 443 open (Let's Encrypt TLS challenge runs on 443)
+#   - Docker Compose v2.24+ (for `!reset`)
+#
 # Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
-version: "3.9"
-
 services:
+  # ─────────────────────────────────────────────────────────────
+  # Traefik: TLS termination + host-based routing
+  # ─────────────────────────────────────────────────────────────
+  traefik:
+    image: traefik:${TRAEFIK_VERSION:-v3.6}
+    command:
+      # Logs
+      - --log.level=INFO
+      - --accesslog=true
+      # Docker provider: only containers with traefik.enable=true are exposed
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=jukebox-net
+      # Entrypoints, HTTP permanently redirected to HTTPS
+      - --entrypoints.http.address=:80
+      - --entrypoints.http.http.redirections.entrypoint.to=https
+      - --entrypoints.http.http.redirections.entrypoint.scheme=https
+      - --entrypoints.http.http.redirections.entrypoint.permanent=true
+      - --entrypoints.https.address=:443
+      # Certificates - Let's Encrypt
+      - --certificatesresolvers.letsencrypt.acme.tlschallenge=true
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?ACME_EMAIL is not set. Add it to deployment/.env (see .env.example)}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      # The dashboard is intentionally not exposed (it has no authentication)
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./data/letsencrypt:/letsencrypt
+    restart: unless-stopped
+    networks:
+      - jukebox-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   backend:
-    # Production: restrict CORS to specific domains
+    # Reachable only through Traefik in production
+    ports: !reset []
     environment:
-      - JUKEBOX_CORS=${JUKEBOX_CORS:-https://earth-jukebox.example.com}
+      # Browsers may call the API from the site itself (www redirects to the apex)
+      - JUKEBOX_CORS=${JUKEBOX_CORS_PROD:-https://${DOMAIN},https://www.${DOMAIN}}
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.jukebox-api.rule=Host(`api.${DOMAIN:?DOMAIN is not set. Add it to deployment/.env (see .env.example)}`)
+      - traefik.http.routers.jukebox-api.entrypoints=https
+      - traefik.http.routers.jukebox-api.tls=true
+      - traefik.http.routers.jukebox-api.tls.certresolver=letsencrypt
+      - traefik.http.services.jukebox-api.loadbalancer.server.port=8000
     # Production logging
     logging:
       driver: "json-file"
@@ -25,6 +85,27 @@ services:
           memory: 512M
 
   webapp:
+    # Reachable only through Traefik in production
+    ports: !reset []
+    labels:
+      - traefik.enable=true
+      # Site on the apex domain
+      - traefik.http.routers.jukebox-web.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.jukebox-web.entrypoints=https
+      - traefik.http.routers.jukebox-web.tls=true
+      - traefik.http.routers.jukebox-web.tls.certresolver=letsencrypt
+      - traefik.http.routers.jukebox-web.service=jukebox-web
+      # www.${DOMAIN} → ${DOMAIN} (permanent redirect, keeps path and query)
+      - traefik.http.routers.jukebox-www.rule=Host(`www.${DOMAIN}`)
+      - traefik.http.routers.jukebox-www.entrypoints=https
+      - traefik.http.routers.jukebox-www.tls=true
+      - traefik.http.routers.jukebox-www.tls.certresolver=letsencrypt
+      - traefik.http.routers.jukebox-www.middlewares=jukebox-www-to-apex
+      - traefik.http.routers.jukebox-www.service=jukebox-web
+      - traefik.http.middlewares.jukebox-www-to-apex.redirectregex.regex=^https://www\.(.+)
+      - traefik.http.middlewares.jukebox-www-to-apex.redirectregex.replacement=https://$${1}
+      - traefik.http.middlewares.jukebox-www-to-apex.redirectregex.permanent=true
+      - traefik.http.services.jukebox-web.loadbalancer.server.port=80
     # Production logging
     logging:
       driver: "json-file"

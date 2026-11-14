@@ -104,18 +104,39 @@ internally on 8000).
 | `WEBAPP_PORT` | 80 | Public port for webapp |
 | `BACKEND_PORT` | 8000 | Port for backend API |
 | `JUKEBOX_CORS` | * | CORS allowed origins |
+| `DOMAIN` | (required in prod) | Domain served by Traefik: webapp on `DOMAIN`, `www.DOMAIN` redirects to it, API on `api.DOMAIN` |
+| `ACME_EMAIL` | (required in prod) | Let's Encrypt account email |
+| `TRAEFIK_VERSION` | v3.6 | Traefik image tag |
+| `JUKEBOX_CORS_PROD` | `https://DOMAIN,https://www.DOMAIN` | Backend CORS origins in prod |
 
 ### Production Deployment
 
+Production runs behind **Traefik** with automatic Let's Encrypt certificates:
+
+| URL | Service |
+|-----|---------|
+| `https://DOMAIN` | webapp |
+| `https://www.DOMAIN` | permanent redirect to `https://DOMAIN` |
+| `https://api.DOMAIN` | backend API (e.g. `https://api.DOMAIN/api/health`) |
+
+1. Point DNS records for `DOMAIN`, `www.DOMAIN` and `api.DOMAIN` at the server.
+2. Open ports 80 and 443 (the certificate challenge runs on 443).
+3. Set `DOMAIN` and `ACME_EMAIL` in `.env` (see `.env.example`).
+4. Start:
+
 ```bash
-# Use production overrides
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
 Production differences:
-- Restricted CORS origins
-- Resource limits (CPU/memory)
-- JSON file logging with rotation
+- Traefik owns ports 80/443; webapp and backend publish no host ports
+- HTTP redirects to HTTPS; certificates stored in `./data/letsencrypt/` (gitignored)
+- Backend CORS restricted to `https://DOMAIN` and `https://www.DOMAIN`
+- The webapp keeps calling `/api` on its own origin (nginx proxies it to the
+  backend internally), so the GHCR image works on any domain without a rebuild
+- Traefik dashboard is not exposed
+- Resource limits (CPU/memory) and JSON file logging with rotation
+- Requires Docker Compose v2.24+ (`!reset`)
 
 ## Data Management
 
