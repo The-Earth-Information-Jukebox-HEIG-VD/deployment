@@ -7,26 +7,33 @@
 #   docker compose logs -f        # View logs
 #   docker compose down           # Stop all services
 
-version: "3.9"
-
 services:
   # ─────────────────────────────────────────────────────────────
   # Data initialization: populates volume with pre-processed datasets
-  # Runs once, exits, and is a dependency for backend
+  # Runs at each `up`, exits, and is a dependency for backend
   # ─────────────────────────────────────────────────────────────
   data-init:
     image: ghcr.io/the-earth-information-jukebox-heig-vd/datasets:${DATASETS_VERSION:-${DATA_TAG:-latest}}
     volumes:
       - jukebox-data:/data
-    command: >
-      sh -c "if [ ! -f /data/.initialized ]; then
-        echo 'Initializing data volume...' &&
-        cp -r /datasets/. /data/ &&
-        touch /data/.initialized &&
-        echo 'Data initialized successfully';
-      else
-        echo 'Data already initialized, skipping';
-      fi"
+    # Copies the data when the volume is empty OR holds another image's data:
+    # .initialized stores a fingerprint of /datasets (file list, sizes, dates),
+    # so changing DATASETS_VERSION (or pulling a rebuilt :latest) refreshes it.
+    # The volume is emptied first so files removed/renamed upstream disappear.
+    command:
+      - sh
+      - -ec
+      - |
+        new=$$(ls -lR /datasets | md5sum | cut -d' ' -f1)
+        if [ "$$(cat /data/.initialized 2>/dev/null)" = "$$new" ]; then
+          echo 'Data already up to date, skipping'
+        else
+          echo 'Initializing data volume...'
+          find /data -mindepth 1 -delete
+          cp -r /datasets/. /data/
+          echo "$$new" > /data/.initialized
+          echo 'Data initialized successfully'
+        fi
     restart: "no"
     networks:
       - jukebox-net

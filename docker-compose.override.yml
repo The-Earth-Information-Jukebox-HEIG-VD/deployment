@@ -2,8 +2,6 @@
 # This file is automatically loaded by docker compose
 # For production, use: docker compose -f docker-compose.yml -f docker-compose.prod.yml up
 
-version: "3.9"
-
 services:
   backend:
     # Mount local data directory for development

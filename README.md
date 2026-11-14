@@ -149,19 +149,22 @@ Production differences:
 ./scripts/init-data.sh
 
 # Or with a specific version
-./scripts/init-data.sh v1.0.0
+./scripts/init-data.sh 1.1.0   # image tag: git tag without the "v"
 ```
 
 ### Update Data
 
+Set the new `DATASETS_VERSION` in `.env` (e.g. `1.2.0`, no `v`) and run
+`docker compose up -d` again. `data-init` compares a fingerprint of the image's
+data with the one stored in the volume (`/data/.initialized`); when they differ
+it empties the volume and copies the new data. The backend then rebuilds only
+the datasets that changed in its cache.
+
+To force a full re-copy anyway:
+
 ```bash
-# Stop services
 docker compose down
-
-# Remove data volume
 docker volume rm jukebox-data
-
-# Restart (will re-initialize data)
 docker compose up -d
 ```
 
