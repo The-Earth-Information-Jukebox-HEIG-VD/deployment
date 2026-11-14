@@ -1,0 +1,101 @@
+# Production behind a Traefik that ALREADY runs on the server (instead of
+# docker-compose.prod.yml, which starts its own Traefik on 80/443).
+#
+# The existing Traefik must have (names as in docker-compose.prod.yml):
+#   - entrypoints "http" (:80) and "https" (:443)
+#   - a certificate resolver "letsencrypt"
+#   - the Docker provider (--providers.docker=true)
+# and TRAEFIK_NETWORK must be a Docker network that Traefik is attached to
+#   docker inspect -f '{{json .NetworkSettings.Networks}}' <traefik container>
+#
+#   https://${DOMAIN}        -> webapp   (www.${DOMAIN} and http:// redirect here)
+#   https://api.${DOMAIN}    -> backend
+#
+# Usage (.env):
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.shared-traefik.yml
+#   (+ :docker-compose.hostdata.yml on a small disk)
+#   TRAEFIK_NETWORK=<network of the existing Traefik>
+#   DOMAIN=example.com
+
+# Own project name: never mixes with another stack's containers, even when
+# this repository is cloned into a folder called "deployment".
+name: jukebox
+
+services:
+  backend:
+    ports: !reset []
+    environment:
+      - JUKEBOX_CORS=${JUKEBOX_CORS_PROD:-https://${DOMAIN},https://www.${DOMAIN}}
+    networks:
+      - jukebox-net
+      - traefik-shared
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:?Set TRAEFIK_NETWORK in .env (network of the existing Traefik)}
+      - traefik.http.routers.jukebox-api.rule=Host(`api.${DOMAIN:?DOMAIN is not set. Add it to deployment/.env}`)
+      - traefik.http.routers.jukebox-api.entrypoints=https
+      - traefik.http.routers.jukebox-api.tls=true
+      - traefik.http.routers.jukebox-api.tls.certresolver=letsencrypt
+      - traefik.http.routers.jukebox-api.service=jukebox-api
+      - traefik.http.routers.jukebox-api-http.rule=Host(`api.${DOMAIN}`)
+      - traefik.http.routers.jukebox-api-http.entrypoints=http
+      - traefik.http.routers.jukebox-api-http.middlewares=jukebox-to-https
+      - traefik.http.routers.jukebox-api-http.service=jukebox-api
+      - traefik.http.services.jukebox-api.loadbalancer.server.port=8000
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 1500M
+
+  webapp:
+    ports: !reset []
+    networks:
+      - jukebox-net
+      - traefik-shared
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK}
+      # Site on the apex domain
+      - traefik.http.routers.jukebox-web.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.jukebox-web.entrypoints=https
+      - traefik.http.routers.jukebox-web.tls=true
+      - traefik.http.routers.jukebox-web.tls.certresolver=letsencrypt
+      - traefik.http.routers.jukebox-web.service=jukebox-web
+      # www.${DOMAIN} -> ${DOMAIN}
+      - traefik.http.routers.jukebox-www.rule=Host(`www.${DOMAIN}`)
+      - traefik.http.routers.jukebox-www.entrypoints=https
+      - traefik.http.routers.jukebox-www.tls=true
+      - traefik.http.routers.jukebox-www.tls.certresolver=letsencrypt
+      - traefik.http.routers.jukebox-www.middlewares=jukebox-www-to-apex
+      - traefik.http.routers.jukebox-www.service=jukebox-web
+      - traefik.http.middlewares.jukebox-www-to-apex.redirectregex.regex=^https://www\.(.+)
+      - traefik.http.middlewares.jukebox-www-to-apex.redirectregex.replacement=https://$${1}
+      - traefik.http.middlewares.jukebox-www-to-apex.redirectregex.permanent=true
+      # http:// -> https:// (the shared Traefik may not redirect globally;
+      # Let's Encrypt HTTP challenges still take precedence on :80)
+      - traefik.http.routers.jukebox-web-http.rule=Host(`${DOMAIN}`) || Host(`www.${DOMAIN}`)
+      - traefik.http.routers.jukebox-web-http.entrypoints=http
+      - traefik.http.routers.jukebox-web-http.middlewares=jukebox-to-https
+      - traefik.http.routers.jukebox-web-http.service=jukebox-web
+      - traefik.http.middlewares.jukebox-to-https.redirectscheme.scheme=https
+      - traefik.http.middlewares.jukebox-to-https.redirectscheme.permanent=true
+      - traefik.http.services.jukebox-web.loadbalancer.server.port=80
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+networks:
+  traefik-shared:
+    external: true
+    name: ${TRAEFIK_NETWORK}

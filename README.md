@@ -179,6 +179,35 @@ at the server, `docker compose up -d --wait`. `DATASETS_VERSION` is unused
 here: update the data by replacing the folder's contents and running
 `docker compose restart backend`.
 
+### Behind an Existing Traefik (shared server)
+
+When the server already runs a Traefik for other sites (ports 80/443 taken),
+use `docker-compose.shared-traefik.yml` **instead of** `docker-compose.prod.yml`:
+it starts no Traefik, publishes no ports, attaches the webapp and the backend to
+the existing Traefik's network and routes `DOMAIN`, `www.DOMAIN` (redirect) and
+`api.DOMAIN` through it, with http -> https redirects. The project is named
+`jukebox`, so it never mixes with another Compose project, even one in a folder
+also called `deployment`.
+
+The existing Traefik needs entrypoints `http` and `https`, a certificate
+resolver `letsencrypt` and the Docker provider. Find its network with:
+
+```bash
+docker inspect -f '{{json .NetworkSettings.Networks}}' <traefik-container> | grep -oE '"[A-Za-z0-9_.-]+":\{' | tr -d '"{:'
+```
+
+In `.env` (add `:docker-compose.hostdata.yml` on a small disk, see above):
+
+```bash
+COMPOSE_FILE=docker-compose.yml:docker-compose.shared-traefik.yml:docker-compose.hostdata.yml
+TRAEFIK_NETWORK=traefik
+JUKEBOX_DATA_PATH=/home/debian/hackathon/jukebox-data
+DOMAIN=example.com
+```
+
+Memory limits: backend 1.5 GB, webapp 256 MB, so the Jukebox cannot starve
+the other services.
+
 ## Data Management
 
 ### Pre-populate Data Volume
