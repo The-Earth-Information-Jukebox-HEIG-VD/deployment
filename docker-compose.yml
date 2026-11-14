@@ -62,12 +62,17 @@ services:
   # ─────────────────────────────────────────────────────────────
   # Webapp: React frontend served by Nginx
   # Proxies /api/* requests to the backend service
+  # Serves the datasets volume read-only at /data/ (globe visuals)
   # ─────────────────────────────────────────────────────────────
   webapp:
     image: ghcr.io/the-earth-information-jukebox-heig-vd/webapp:${TAG:-latest}
     ports:
       - "${WEBAPP_PORT:-80}:80"
+    volumes:
+      - jukebox-data:/usr/share/nginx/data:ro
     depends_on:
+      data-init:
+        condition: service_completed_successfully
       backend:
         condition: service_healthy
     restart: unless-stopped
