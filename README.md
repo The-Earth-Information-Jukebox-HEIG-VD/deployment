@@ -140,6 +140,45 @@ Production differences:
 - Resource limits (CPU/memory) and JSON file logging with rotation
 - Requires Docker Compose v2.24+ (`!reset`)
 
+### Small Server (data from a host folder)
+
+The datasets image is a single 6.3 GB layer: pulling it needs about twice
+that, and `data-init` then copies another 6.3 GB into the `jukebox-data`
+volume (~19-23 GB in total). On a small server (e.g. 1 vCPU, 2 GB RAM,
+20 GB disk) use `docker-compose.hostdata.yml` instead: the data is stored
+once as plain files and mounted read-only into the backend and the webapp
+(~11 GB in total). Measured at 1 CPU / 1.5 GB RAM: first-start data
+preparation 53 s with a 911 MiB peak, one 30 s chunk with all six
+instruments in ~1.7 s.
+
+```bash
+# Optional on 2 GB RAM: swap as a safety margin
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
+# Data: clone once, keep only data/ (fires_2002_2026 is used by neither
+# the backend nor the globe, 580 MB)
+git clone --depth 1 git@github.com:The-Earth-Information-Jukebox-HEIG-VD/datasets.git
+mv datasets/data ~/jukebox-data && rm -rf datasets ~/jukebox-data/fires_2002_2026
+```
+
+In `.env`:
+
+```bash
+COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.hostdata.yml
+JUKEBOX_DATA_PATH=/home/ubuntu/jukebox-data   # absolute path
+WEBAPP_VERSION=1.1.0
+SONIFICATION_VERSION=1.1.0
+DOMAIN=example.com
+ACME_EMAIL=admin@example.com
+```
+
+Then `docker compose pull` (no datasets image is pulled) and, once DNS points
+at the server, `docker compose up -d --wait`. `DATASETS_VERSION` is unused
+here: update the data by replacing the folder's contents and running
+`docker compose restart backend`.
+
 ## Data Management
 
 ### Pre-populate Data Volume

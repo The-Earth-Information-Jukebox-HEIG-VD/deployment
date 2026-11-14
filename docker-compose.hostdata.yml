@@ -1,0 +1,31 @@
+# Serve the datasets from a folder on the host instead of the datasets image.
+#
+# For small servers (e.g. 20 GB disk): the datasets image is one 6.3 GB layer
+# that needs ~2x its size while pulling, plus another 6.3 GB once copied into
+# the jukebox-data volume. Here the data exists once, as plain files.
+#
+# Put the data on the server first (one .npy folder per dataset, as in the
+# datasets repository's data/ directory), e.g. from a machine that has it:
+#   rsync -a --info=progress2 datasets/data/ user@server:~/jukebox-data/
+#
+# Usage (with production):
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.hostdata.yml
+#   JUKEBOX_DATA_PATH=/home/ubuntu/jukebox-data      # in .env, absolute path
+
+services:
+  # Not used: the data comes from the host folder below.
+  data-init:
+    profiles: ["registry"]
+
+  backend:
+    volumes:
+      - ${JUKEBOX_DATA_PATH:?Set JUKEBOX_DATA_PATH in .env (folder with the datasets)}:/app/data:ro
+    depends_on: !reset {}
+
+  webapp:
+    # nginx serves the raw .npy maps at /data/ for the globe
+    volumes:
+      - ${JUKEBOX_DATA_PATH:?Set JUKEBOX_DATA_PATH in .env (folder with the datasets)}:/usr/share/nginx/data:ro
+    depends_on: !override
+      backend:
+        condition: service_healthy
