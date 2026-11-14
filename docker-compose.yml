@@ -1,0 +1,97 @@
+# Earth Information Jukebox - Docker Compose Orchestration
+# Combines webapp, backend, and data services
+#
+# Usage:
+#   cp .env.example .env          # Configure environment
+#   docker compose up -d          # Start all services
+#   docker compose logs -f        # View logs
+#   docker compose down           # Stop all services
+
+version: "3.9"
+
+services:
+  # ─────────────────────────────────────────────────────────────
+  # Data initialization: populates volume with pre-processed datasets
+  # Runs once, exits, and is a dependency for backend
+  # ─────────────────────────────────────────────────────────────
+  data-init:
+    image: ghcr.io/the-earth-information-jukebox-heig-vd/datasets:${DATA_TAG:-latest}
+    volumes:
+      - jukebox-data:/data
+    command: >
+      sh -c "if [ ! -f /data/.initialized ]; then
+        echo 'Initializing data volume...' &&
+        cp -r /datasets/. /data/ &&
+        touch /data/.initialized &&
+        echo 'Data initialized successfully';
+      else
+        echo 'Data already initialized, skipping';
+      fi"
+    restart: "no"
+    networks:
+      - jukebox-net
+
+  # ─────────────────────────────────────────────────────────────
+  # Backend: FastAPI sonification service
+  # Transforms climate data into orchestral music (MIDI + audio)
+  # ─────────────────────────────────────────────────────────────
+  backend:
+    image: ghcr.io/the-earth-information-jukebox-heig-vd/sonification:${TAG:-latest}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    environment:
+      - JUKEBOX_DATA_DIR=/app/data
+      - JUKEBOX_CACHE_DIR=/app/cache
+      - JUKEBOX_CORS=${JUKEBOX_CORS:-*}
+    volumes:
+      - jukebox-data:/app/data:ro
+      - jukebox-cache:/app/cache
+    depends_on:
+      data-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - jukebox-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ─────────────────────────────────────────────────────────────
+  # Webapp: React frontend served by Nginx
+  # Proxies /api/* requests to the backend service
+  # ─────────────────────────────────────────────────────────────
+  webapp:
+    image: ghcr.io/the-earth-information-jukebox-heig-vd/webapp:${TAG:-latest}
+    ports:
+      - "${WEBAPP_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - jukebox-net
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+# ─────────────────────────────────────────────────────────────
+# Named volumes for data persistence
+# ─────────────────────────────────────────────────────────────
+volumes:
+  jukebox-data:
+    name: jukebox-data
+  jukebox-cache:
+    name: jukebox-cache
+
+# ─────────────────────────────────────────────────────────────
+# Internal network for service communication
+# ─────────────────────────────────────────────────────────────
+networks:
+  jukebox-net:
+    driver: bridge

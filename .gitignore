@@ -1,0 +1,23 @@
+# Environment files with secrets
+.env
+.env.local
+.env.production
+
+# Data directory (use volumes instead)
+data/
+!data/README.md
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Docker volumes and temporary files
+*.log
+tmp/
