@@ -1,0 +1,47 @@
+# Local full-stack overrides: build images from the sibling repositories
+# instead of pulling them from GHCR, and use the datasets checkout directly.
+#
+# Expected layout (all repos side by side):
+#   ../webapp        → webapp image (Nginx + React build)
+#   ../sonification  → backend image (FastAPI + audio rendering)
+#   ../datasets/data → mounted read-only at /app/data (no 5.7 GB copy)
+#
+# Usage (from deployment/):
+#   ./scripts/run-local.sh            # build + start, waits for health
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml down
+
+services:
+  # Not needed locally: data comes from the bind mount below.
+  # Still runnable with `--profile registry` if you want the volume flow.
+  data-init:
+    profiles: ["registry"]
+
+  backend:
+    image: earth-jukebox/sonification:local
+    pull_policy: build
+    build:
+      context: ../sonification
+      # args:
+      #   WITH_VSCO: "1"   # + real orchestral samples (~440 MB, slower build)
+    volumes:
+      - ../datasets/data:/app/data:ro
+    depends_on: !reset {}
+    healthcheck:
+      # First start converts the raw data into the cache volume; give it time
+      start_period: 60s
+
+  webapp:
+    image: earth-jukebox/webapp:local
+    pull_policy: build
+    build:
+      context: ../webapp
+      args:
+        # From deployment/.env; the webapp Dockerfile writes it to .env before `npm run build`
+        VITE_API_URL: ${VITE_API_URL:?VITE_API_URL is not set. Add it to deployment/.env (see .env.example)}
+    # nginx serves the raw .npy maps at /data/ (see webapp/nginx.conf)
+    volumes:
+      - ../datasets/data:/usr/share/nginx/data:ro
+    depends_on: !reset
+      backend:
+        condition: service_healthy

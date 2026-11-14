@@ -22,6 +22,32 @@ docker compose up -d
 docker compose logs -f
 ```
 
+## Run Locally From Source
+
+Builds the images from the sibling repositories instead of pulling them, and
+mounts `../datasets/data` read-only (no copy into a volume):
+
+```
+SpaceAppsChallenge/
+├── deployment/     ← run from here
+├── webapp/
+├── sonification/
+└── datasets/
+```
+
+```bash
+cp .env.example .env            # required: set VITE_API_URL (webapp build arg)
+./scripts/run-local.sh          # build + start, waits until healthy
+./scripts/run-local.sh logs     # follow logs
+./scripts/run-local.sh down     # stop
+```
+
+`VITE_API_URL` is baked into the webapp bundle at build time; the webapp
+Dockerfile writes it to `.env` before `npm run build`. Keep `/api` so the
+browser goes through the nginx proxy. If port 8000 is taken on your machine,
+set `BACKEND_PORT` to another port (the webapp still reaches the backend
+internally on 8000).
+
 ## Services
 
 | Service | Description | Port |
