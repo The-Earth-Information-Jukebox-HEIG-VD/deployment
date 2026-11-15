@@ -184,8 +184,8 @@ In `.env`:
 ```bash
 COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.hostdata.yml
 JUKEBOX_DATA_PATH=/home/ubuntu/jukebox-data   # absolute path
-WEBAPP_VERSION=1.1.0
-SONIFICATION_VERSION=1.1.0
+WEBAPP_VERSION=1.4.0
+SONIFICATION_VERSION=1.4.0
 DOMAIN=example.com
 ACME_EMAIL=admin@example.com
 ```
@@ -233,12 +233,12 @@ the other services.
 ./scripts/init-data.sh
 
 # Or with a specific version
-./scripts/init-data.sh 1.1.0   # image tag: git tag without the "v"
+./scripts/init-data.sh 1.4.0   # image tag: git tag without the "v"
 ```
 
 ### Update Data
 
-Set the new `DATASETS_VERSION` in `.env` (e.g. `1.2.0`, no `v`) and run
+Set the new `DATASETS_VERSION` in `.env` (e.g. `1.4.0`, no `v`) and run
 `docker compose up -d` again. `data-init` compares a fingerprint of the image's
 data with the one stored in the volume (`/data/.initialized`); when they differ
 it empties the volume and copies the new data. The backend then rebuilds only
