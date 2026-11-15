@@ -88,6 +88,7 @@ internally on 8000).
 ┌─────────────────────────────────────────────────────────────┐
 │  backend (FastAPI, JUKEBOX_FULL_API=0 in the image)         │
 │  ├── GET  /api/health          - Health / data preparation  │
+│  ├── GET  /api/genres          - Musical genres             │
 │  ├── GET  /api/instruments     - Datasets + their instrument│
 │  ├── POST /api/zones/zone-data - 30 s MP3 chunk (base64)    │
 │  ├── POST /api/zones/series    - Values of a zone over time │
@@ -98,7 +99,7 @@ internally on 8000).
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  jukebox-data (volume, or JUKEBOX_DATA_PATH, read-only)     │
-│  └── <dataset>/*.npy - one folder per dataset (7)           │
+│  └── <dataset>/*.npy - one folder per dataset (12)          │
 │  jukebox-cache (volume)                                     │
 │  └── _datasets/*.npz + *.json - built from the .npy folders │
 │      on first start (backend/prepare_data.py)               │
@@ -158,14 +159,14 @@ Production differences:
 
 ### Small Server (data from a host folder)
 
-The datasets image is a single 6.3 GB layer: pulling it needs about twice
-that, and `data-init` then copies another 6.3 GB into the `jukebox-data`
-volume (~19-23 GB in total). On a small server (e.g. 1 vCPU, 2 GB RAM,
+The datasets image is a single ~9.1 GB layer: pulling it needs about twice
+that, and `data-init` then copies another ~9.1 GB into the `jukebox-data`
+volume (~27-32 GB in total). On a small server (e.g. 1 vCPU, 2 GB RAM,
 20 GB disk) use `docker-compose.hostdata.yml` instead: the data is stored
 once as plain files and mounted read-only into the backend and the webapp
-(~11 GB in total). Measured at 1 CPU / 1.5 GB RAM: first-start data
-preparation 53 s with a 911 MiB peak, one 30 s chunk in ~1.7 s (measured
-with six of the seven instruments, without fires).
+(~14 GB in total). Measured at 1 CPU / 1.5 GB RAM on an earlier version
+with six datasets: first-start data preparation 53 s with a 911 MiB peak,
+one 30 s chunk in ~1.7 s (not re-measured with the 11 instruments).
 
 ```bash
 # Optional on 2 GB RAM: swap as a safety margin
@@ -173,7 +174,7 @@ sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
 sudo mkswap /swapfile && sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 
-# Data: clone once, keep only data/ (all seven folders are used)
+# Data: clone once, keep only data/ (11 of the 12 folders are used; rain_belt_2000_2026 is not)
 git clone --depth 1 git@github.com:The-Earth-Information-Jukebox-HEIG-VD/datasets.git
 mv datasets/data ~/jukebox-data && rm -rf datasets
 ```

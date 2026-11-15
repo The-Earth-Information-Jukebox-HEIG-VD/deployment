@@ -10,7 +10,7 @@ the backend (`/app/data`) and by the webapp (`/usr/share/nginx/data`, served at
 On a small server, `docker-compose.hostdata.yml` replaces the image and the
 volume with a host folder: set `JUKEBOX_DATA_PATH` (absolute path) in `.env`
 and that folder is mounted read-only at the same two places. Total size of the
-seven folders: 6.3 GB.
+12 folders: 9.1 GB (`du -sh`).
 
 The backend converts these folders on first start into its own `.npz` + `.json`
 files in the `jukebox-cache` volume (`_datasets/`); the data folder itself is
@@ -28,9 +28,15 @@ precipitation_rain_2000_2026/rain_YYYY_MM.npy                   mm/h         flo
 precipitation_snow_2000_2026/snow_YYYY_MM.npy                   mm/h         float16
 fires_2002_2026/fires_YYYY_MM.npy                               -            float16
 nightlights_2012_2023/nightlights_YYYY.npy                      -            float32
+sea_ice_1979_2026/sea_ice_YYYY_MM.npy                           %            float16
+vegetation_ndvi_2000_2026/ndvi_YYYY_MM.npy                      NDVI         float16
+carbon_monoxide_2000_2024/co_YYYY_MM.npy                        1e18 molec/cm2 float16
+chlorophyll_2002_2026/chlorophyll_YYYY_MM.npy                   mg/m3        float16
+rain_belt_2000_2026/rain_belt_YYYY_MM.npy                       mm/h         float32 (720 values, not used)
 ```
 
-Every file is a 720 x 1440 grid of 0.25° pixels (row 0 = 90°N, column 0 = 180°W),
+The first 11 folders feed the 11 instruments; the rain belt is not used by the
+backend. Except the rain belt (one value per latitude row), every file is a 720 x 1440 grid of 0.25° pixels (row 0 = 90°N, column 0 = 180°W),
 NaN = no data. The same `[row, column]` is the same place in every dataset.
 
 ## How the webapp uses it
