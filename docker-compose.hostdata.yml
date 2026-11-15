@@ -1,7 +1,7 @@
 # Serve the datasets from a folder on the host instead of the datasets image.
 #
-# For small servers (e.g. 20 GB disk): the datasets image is one 6.3 GB layer
-# that needs ~2x its size while pulling, plus another 6.3 GB once copied into
+# For small servers (e.g. 20 GB disk): the datasets image is one ~9.1 GB layer
+# that needs ~2x its size while pulling, plus another ~9.1 GB once copied into
 # the jukebox-data volume. Here the data exists once, as plain files.
 #
 # Put the data on the server first (one .npy folder per dataset, as in the

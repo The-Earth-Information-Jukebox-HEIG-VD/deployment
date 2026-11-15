@@ -4,7 +4,7 @@
 # Expected layout (all repos side by side):
 #   ../webapp        → webapp image (Nginx + React build)
 #   ../sonification  → backend image (FastAPI + audio rendering)
-#   ../datasets/data → mounted read-only at /app/data (no 6.3 GB copy)
+#   ../datasets/data → mounted read-only at /app/data (no 9.1 GB copy)
 #
 # Usage (from deployment/):
 #   ./scripts/run-local.sh            # build + start, waits for health
