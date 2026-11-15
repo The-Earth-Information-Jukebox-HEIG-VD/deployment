@@ -1,6 +1,6 @@
 # Earth Information Jukebox - Deployment
 
-Docker Compose orchestration for the Earth Information Jukebox project.
+Docker Compose orchestration for the Earth Information Jukebox project: it runs **EarthChestra** (the webapp), the sonification backend and the datasets.
 
 ## Quick Start
 
@@ -69,27 +69,39 @@ internally on 8000).
 │                         Internet                            │
 └─────────────────────────────────────────────────────────────┘
                               │
+                              ▼ :80 (dev) / :443 (prod, shared)
+┌─────────────────────────────────────────────────────────────┐
+│  traefik (prod: own container; shared: existing one)        │
+│  ├── DOMAIN, www.DOMAIN (redirect) → webapp:80              │
+│  └── api.DOMAIN → backend:8000                              │
+└─────────────────────────────────────────────────────────────┘
+                              │
                               ▼ :80
 ┌─────────────────────────────────────────────────────────────┐
 │  webapp (nginx)                                             │
 │  ├── Serves React SPA                                       │
+│  ├── Serves the raw .npy maps at /data/ (globe, JSON index) │
 │  └── Proxies /api/* → backend:8000                          │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼ :8000
 ┌─────────────────────────────────────────────────────────────┐
-│  backend (FastAPI)                                          │
-│  ├── /api/health - Health check                             │
-│  ├── /api/datasets - List available datasets                │
-│  ├── /api/compose - Generate sonification                   │
-│  └── /api/cache/* - Serve generated audio/MIDI              │
+│  backend (FastAPI, JUKEBOX_FULL_API=0 in the image)         │
+│  ├── GET  /api/health          - Health / data preparation  │
+│  ├── GET  /api/instruments     - Datasets + their instrument│
+│  ├── POST /api/zones/zone-data - 30 s MP3 chunk (base64)    │
+│  ├── POST /api/zones/series    - Values of a zone over time │
+│  ├── POST /api/zones/groove    - Vinyl mode: path, one date │
+│  └── POST /api/sonify          - Chunk for a point/mask     │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  jukebox-data (volume)                                      │
-│  ├── *.npz - Intensity maps                                 │
-│  └── *.json - Dataset metadata                              │
+│  jukebox-data (volume, or JUKEBOX_DATA_PATH, read-only)     │
+│  └── <dataset>/*.npy - one folder per dataset (7)           │
+│  jukebox-cache (volume)                                     │
+│  └── _datasets/*.npz + *.json - built from the .npy folders │
+│      on first start (backend/prepare_data.py)               │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -110,6 +122,10 @@ internally on 8000).
 | `ACME_EMAIL` | (required in prod) | Let's Encrypt account email |
 | `TRAEFIK_VERSION` | v3.6 | Traefik image tag |
 | `JUKEBOX_CORS_PROD` | `https://DOMAIN,https://www.DOMAIN` | Backend CORS origins in prod |
+| `COMPOSE_FILE` | - | Compose files to load, `:`-separated (e.g. `docker-compose.yml:docker-compose.prod.yml`); replaces `-f` flags. When set, `docker-compose.override.yml` is not loaded |
+| `JUKEBOX_DATA_PATH` | (required with `docker-compose.hostdata.yml`) | Absolute host folder holding the dataset folders, mounted read-only into backend and webapp |
+| `TRAEFIK_NETWORK` | (required with `docker-compose.shared-traefik.yml`) | Docker network of the existing Traefik |
+| `VITE_API_URL` | (required with `docker-compose.local.yml`) | API base URL baked into the webapp bundle at build time; keep `/api` |
 
 ### Production Deployment
 
@@ -148,8 +164,8 @@ volume (~19-23 GB in total). On a small server (e.g. 1 vCPU, 2 GB RAM,
 20 GB disk) use `docker-compose.hostdata.yml` instead: the data is stored
 once as plain files and mounted read-only into the backend and the webapp
 (~11 GB in total). Measured at 1 CPU / 1.5 GB RAM: first-start data
-preparation 53 s with a 911 MiB peak, one 30 s chunk with all six
-instruments in ~1.7 s.
+preparation 53 s with a 911 MiB peak, one 30 s chunk in ~1.7 s (measured
+with six of the seven instruments, without fires).
 
 ```bash
 # Optional on 2 GB RAM: swap as a safety margin
@@ -157,10 +173,9 @@ sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
 sudo mkswap /swapfile && sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 
-# Data: clone once, keep only data/ (fires_2002_2026 is used by neither
-# the backend nor the globe, 580 MB)
+# Data: clone once, keep only data/ (all seven folders are used)
 git clone --depth 1 git@github.com:The-Earth-Information-Jukebox-HEIG-VD/datasets.git
-mv datasets/data ~/jukebox-data && rm -rf datasets ~/jukebox-data/fires_2002_2026
+mv datasets/data ~/jukebox-data && rm -rf datasets
 ```
 
 In `.env`:
@@ -238,9 +253,15 @@ docker compose up -d
 
 ### Use Local Data (Development)
 
-1. Place data files in `./data/`
-2. Uncomment volume mount in `docker-compose.override.yml`
-3. Restart services
+- **From source**: `./scripts/run-local.sh` (`docker-compose.local.yml`) mounts
+  `../datasets/data` read-only into the backend and the webapp.
+- **Pulled images**: set `JUKEBOX_DATA_PATH` to the absolute path of the data
+  folder (e.g. `$PWD/../datasets/data`) and add `docker-compose.hostdata.yml`, which
+  mounts it into both services. The commented mount in
+  `docker-compose.override.yml` covers the backend only (the globe would still
+  read the volume), and that file is ignored whenever `COMPOSE_FILE` is set.
+
+See `data/README.md` for the expected layout.
 
 ## Troubleshooting
 
@@ -268,8 +289,12 @@ docker run --rm -v jukebox-data:/data alpine ls -la /data
 ### API not responding
 
 ```bash
-# Check backend health
+# Check backend health (dev: backend port published on the host)
 curl http://localhost:8000/api/health
+
+# Prod / shared Traefik: no host port, go through Traefik or the container
+curl https://api.$DOMAIN/api/health
+docker compose exec backend curl -f http://localhost:8000/api/health
 
 # Check nginx proxy
 curl -v http://localhost/api/health
