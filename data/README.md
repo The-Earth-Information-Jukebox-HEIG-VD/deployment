@@ -66,3 +66,5 @@ automatically (fallback color; add it to the registry for units and a label).
         - ../datasets/data:/usr/share/nginx/data:ro
   ```
   then `docker compose up -d`.
+
+> AI assistance: Google Gemini and Anthropic Claude helped with research, data analysis, coding and debugging, and writing for the data volume setup. See [AI assistance](../README.md#ai-assistance).

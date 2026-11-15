@@ -309,6 +309,17 @@ curl -v http://localhost/api/health
 | backend (sonification) | ghcr.io/the-earth-information-jukebox-heig-vd/sonification |
 | datasets | ghcr.io/the-earth-information-jukebox-heig-vd/datasets |
 
+## AI assistance
+
+This deployment setup was developed with the help of AI assistants, Google Gemini and Anthropic Claude. In this repository they were used for:
+
+- **Research and information gathering:** Docker Compose, Traefik and Let's Encrypt configuration.
+- **Data analysis and interpretation:** reading resource, memory and disk measurements to size the small-server setup.
+- **Coding, debugging and troubleshooting:** the Compose files, the `scripts/` helpers and troubleshooting containers.
+- **Writing, editing and translating:** this README.
+
+The team checked what the AI suggested and is responsible for the content of this repository.
+
 ## License
 
 Part of the NASA Space Apps Challenge 2026 project.
