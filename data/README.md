@@ -7,9 +7,18 @@ service copies it into the `jukebox-data` volume, which is mounted read-only by
 the backend (`/app/data`) and by the webapp (`/usr/share/nginx/data`, served at
 `/data/`).
 
+On a small server, `docker-compose.hostdata.yml` replaces the image and the
+volume with a host folder: set `JUKEBOX_DATA_PATH` (absolute path) in `.env`
+and that folder is mounted read-only at the same two places. Total size of the
+seven folders: 6.3 GB.
+
+The backend converts these folders on first start into its own `.npz` + `.json`
+files in the `jukebox-cache` volume (`_datasets/`); the data folder itself is
+never written.
+
 ## Volume layout (repository `datasets`)
 
-One folder per dataset, one `.npy` per month:
+One folder per dataset, one `.npy` per month (per year for night lights):
 
 ```
 temperature_anomaly_1880_2025/temperature_anomaly_YYYY_MM.npy   °C anomaly   float16
@@ -17,6 +26,8 @@ co2_2002_2022/co2_YYYY_MM.npy                                   ppm          flo
 lightning_2017_2023/lightning_YYYY_MM.npy                       0-1          float16
 precipitation_rain_2000_2026/rain_YYYY_MM.npy                   mm/h         float16
 precipitation_snow_2000_2026/snow_YYYY_MM.npy                   mm/h         float16
+fires_2002_2026/fires_YYYY_MM.npy                               -            float16
+nightlights_2012_2023/nightlights_YYYY.npy                      -            float32
 ```
 
 Every file is a 720 x 1440 grid of 0.25° pixels (row 0 = 90°N, column 0 = 180°W),
